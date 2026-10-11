@@ -1,0 +1,74 @@
+# Reusable: cross-compiles static binaries for Linux, macOS and Windows and
+# uploads them as workflow artifacts (one per platform, plus checksums).
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version stamped into the binary (main.version)
+        type: string
+        required: true
+      ref:
+        description: Git ref to build (default the triggering ref)
+        type: string
+        default: ""
+      retention-days:
+        type: number
+        default: 14
+
+permissions:
+  contents: read
+
+jobs:
+  binaries:
+    name: ${{ matrix.goos }}/${{ matrix.goarch }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { goos: linux,   goarch: amd64 }
+          - { goos: linux,   goarch: arm64 }
+          - { goos: darwin,  goarch: amd64 }
+          - { goos: darwin,  goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64 }
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.ref }}
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "0"
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          name="logto-cli_${VERSION#v}_${GOOS}_${GOARCH}"
+          ext=""; [ "$GOOS" = windows ] && ext=".exe"
+          mkdir -p "dist/$name"
+          go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+            -o "dist/$name/logto-cli$ext" ./cmd/logto-cli
+          cp README.md "dist/$name/"
+          cd dist
+          if [ "$GOOS" = windows ]; then
+            zip -qr "$name.zip" "$name"
+          else
+            tar -czf "$name.tar.gz" "$name"
+          fi
+          rm -rf "$name"
+          ls -l
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: logto-cli-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          retention-days: ${{ inputs.retention-days }}
+          if-no-files-found: error
