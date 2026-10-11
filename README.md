@@ -204,3 +204,7 @@ The `Release` workflow then does the following:
 You can also re-run it for an existing tag from the Actions tab (`workflow_dispatch`).
 
 CI (`ci.yml`) runs on every push and pull request. It runs lint, the unit tests and the dockerized integration test, and uploads the cross-compiled binaries as workflow artifacts.
+
+## License
+
+[MIT](LICENSE) © ReaperMaga
